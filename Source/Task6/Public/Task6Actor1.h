@@ -1,58 +1,79 @@
-﻿#pragma once
+﻿#include "Task6Actor1.h"
+#include "UObject/ConstructorHelpers.h"
+#include "TimerManager.h"
 
-#include "CoreMinimal.h"
-#include "GameFramework/Actor.h"
-#include "Components/StaticMeshComponent.h"
-#include "Task6Actor1.generated.h"
-
-UCLASS()
-class TASK6_API ATask6Actor1 : public AActor
+// Sets default values
+ATask6Actor1::ATask6Actor1()
 {
-    GENERATED_BODY()
+    // Tick 사용 안함
+    PrimaryActorTick.bCanEverTick = false;
 
-public:
-    // 생성자
-    ATask6Actor1();
+    // 스태틱 메쉬 생성 및 루트 지정
+    StaticMesh1 = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("StaticMesh1"));
+    RootComponent = StaticMesh1;
 
-protected:
-    // 게임 시작 시 호출
-    virtual void BeginPlay() override;
+    // 임시 큐브 메쉬
+    static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));
+    if (CubeMesh.Succeeded())
+    {
+        StaticMesh1->SetStaticMesh(CubeMesh.Object);
+    }
 
-    // 타이머에서 호출될 이동 함수
-    void MovePlatform();
+    // 메쉬 가시성
+    StaticMesh1->SetVisibility(true);
+    StaticMesh1->SetMobility(EComponentMobility::Movable);
 
-    // 플랫폼 스태틱 메쉬
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Platform")
-    UStaticMeshComponent* StaticMesh1;
+    // 기본 값
+    MoveSpeed = 200.f;
+    MaxRange = 500.f;
+    MoveDirection = 1;
 
-    // 이동 속도 (랜덤 범위)
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Platform|Movement")
-    float MoveSpeedMin = 100.f;
+    // 랜덤 범위용 초기화
+    MaxMoveRange = 0.f;
+}
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Platform|Movement")
-    float MoveSpeedMax = 400.f;
+// Called when the game starts or when spawned
+void ATask6Actor1::BeginPlay()
+{
+    Super::BeginPlay();
 
-    // 최대 이동 범위
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Platform|Movement")
-    float MaxRange = 500.f;
+    // 시작 위치 랜덤화
+    FVector RandomLocation = FVector(
+        FMath::RandRange(-500.f, 500.f),
+        FMath::RandRange(-500.f, 500.f),
+        GetActorLocation().Z
+    );
+    SetActorLocation(RandomLocation);
 
-    // 이동 간격 (초)
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Platform|Movement")
-    float MoveInterval = 0.02f;
+    // StartLocation도 랜덤 위치로 변경
+    StartLocation = GetActorLocation();
 
-    // 랜덤으로 결정되는 실제 속도
-    float MoveSpeed;
+    // 최대 이동 범위 랜덤
+    MaxMoveRange = FMath::RandRange(100.f, MaxRange);
 
-    // 랜덤으로 결정되는 실제 이동 범위
-    float MaxMoveRange;
+    // 이동 속도 랜덤
+    MoveSpeed = FMath::RandRange(MoveSpeedMin, MoveSpeedMax);
 
-private:
-    // 시작 위치
-    FVector StartLocation;
+    // 타이머 시작
+    GetWorld()->GetTimerManager().SetTimer(
+        MoveTimerHandle,
+        this,
+        &ATask6Actor1::MovePlatform,
+        MoveInterval,
+        true
+    );
+}
 
-    // 이동 방향
-    int MoveDirection = 1;
+void ATask6Actor1::MovePlatform()
+{
+    FVector CurrentLocation = GetActorLocation();
+    CurrentLocation.X += MoveSpeed * MoveInterval * MoveDirection;
 
-    // 타이머 핸들
-    FTimerHandle MoveTimerHandle;
-};
+    // 범위를 벗어나면 방향 반전
+    if ((CurrentLocation - StartLocation).SizeSquared() >= MaxMoveRange * MaxMoveRange)
+    {
+        MoveDirection *= -1;
+    }
+
+    SetActorLocation(CurrentLocation);
+}
